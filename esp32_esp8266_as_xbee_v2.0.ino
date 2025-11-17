@@ -94,8 +94,15 @@ uint32_t queueOverflows = 0;
 // ============================================================================
 
 bool enqueueCommand(const char* cmd, uint8_t len) {
-  if (queueCount >= QUEUE_SIZE) {
+  // Atomic check of queue count
+  noInterrupts();
+  bool isFull = (queueCount >= QUEUE_SIZE);
+  if (isFull) {
     queueOverflows++;
+  }
+  interrupts();
+
+  if (isFull) {
     Serial.println(F("WARNING: Command queue full!"));
     return false;
   }
@@ -108,20 +115,32 @@ bool enqueueCommand(const char* cmd, uint8_t len) {
   commandQueue[queueHead].data[len] = '\0';
   commandQueue[queueHead].length = len;
 
+  // Atomic update of queue pointers
+  noInterrupts();
   queueHead = (queueHead + 1) % QUEUE_SIZE;
   queueCount++;
+  interrupts();
 
   return true;
 }
 
 bool dequeueCommand(Command* cmd) {
-  if (queueCount == 0) {
+  // Atomic check of queue count
+  noInterrupts();
+  bool isEmpty = (queueCount == 0);
+  interrupts();
+
+  if (isEmpty) {
     return false;
   }
 
   memcpy(cmd, &commandQueue[queueTail], sizeof(Command));
+
+  // Atomic update of queue pointers
+  noInterrupts();
   queueTail = (queueTail + 1) % QUEUE_SIZE;
   queueCount--;
+  interrupts();
 
   return true;
 }
@@ -142,7 +161,6 @@ void processSerialQueue() {
   if (dequeueCommand(&cmd)) {
     // Send to serial
     Serial.write((uint8_t*)cmd.data, cmd.length);
-    Serial.flush();
 
     lastSerialSend = currentTime;
     totalCommandsSent++;
@@ -324,7 +342,6 @@ void handleDataTransfer() {
     // Read available serial data
     while (Serial.available() > 0 && len < 63) {
       serialData[len++] = Serial.read();
-      delayMicroseconds(100); // Small delay to allow buffer to fill
     }
 
     // Broadcast to all connected clients
@@ -332,7 +349,6 @@ void handleDataTransfer() {
       for (int i = 0; i < MAX_CLIENTS; i++) {
         if (clientConnected[i]) {
           clients[i].write((uint8_t*)serialData, len);
-          clients[i].flush();
         }
       }
     }
