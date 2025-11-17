@@ -699,4 +699,4 @@ A: No, configuration is done directly in Arduino code.
 
 ---
 
-**Good luck with your ESP32 WiFi setup!** 📡🤖
+**Good luck with your setup!** 📡🤖
